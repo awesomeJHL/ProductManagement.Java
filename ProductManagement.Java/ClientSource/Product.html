@@ -1,0 +1,520 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8" />
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta name="description" content="" />
+        <meta name="author" content="" />
+        <title>Product</title>
+        <link href="css/styles.css" rel="stylesheet" />
+        <link href="https://cdn.datatables.net/1.10.22/css/jquery.dataTables.min.css" rel="stylesheet" crossorigin="anonymous" />
+    </head>
+    
+    <script type="text/javascript">
+        
+        /*----------------------------*/
+        /*Global variable*/
+        /*----------------------------*/    
+        const BASE_URL = "http://localhost:8080/api";
+        const HEADER_CONTENT_TYPE = "application/json";
+        const HEADER_DATA_TYPE = "json";
+
+        /*----------------------------*/
+        /*initialze*/
+        /*----------------------------*/
+        window.onload = function(){
+            init();
+        } 
+
+        function init(){
+            initAddEvent();
+            getProductList();
+        } 
+
+        function initAddEvent(){
+
+            //search button click
+            document.getElementById("btnSearch").onclick = function() {
+                getProductList();
+            }
+
+            //add button click
+            document.getElementById("btnCreate").onclick = function() {
+                document.getElementById("modalTitle").innerText = "Create Product";
+                clearModal();
+            }
+
+            //delete button click
+            document.getElementById("btnDelete").onclick = function() {
+                
+                let id = document.getElementById("hiddenId").value;
+                if(id == ""){
+                    return alert("delete data not found");
+                }
+                
+                if(!confirm("Are you sure you want to delete?"))
+                    return;
+
+                deleteProduct(id);
+                //clearModal();
+            }            
+
+            //save button click in modal
+            document.getElementById("btnSave").onclick = function() {
+                
+                if(!inputValidation())
+                    return;
+
+                if(!confirm("Are you sure you want to save?"))
+                    return;
+
+                let id = document.getElementById("hiddenId").value;
+
+                if(id != "" ){
+                    editProduct(id);
+                }else{
+                    createProduct();
+                }
+            }
+        }
+        
+        /*----------------------------*/
+        /*request*/
+        /*----------------------------*/
+        //get products from server
+        function getProductList(page="0") {
+
+            $.ajax({
+                url: BASE_URL + "/products?page="+page,
+                beforeSend: function(xhrObj){
+                    //xhrObj.setRequestHeader('Authorization', 'Bearer ' + token);
+                },
+                contentType: HEADER_CONTENT_TYPE,
+                dataType: HEADER_DATA_TYPE,
+                type: "GET",
+                data: "",
+            })
+
+            .done(function(result) {
+                //console.log(result);
+                console.log(result);
+                afterGetProducts(result._embedded);
+            })
+
+            .fail(function(jqXHR, textStatus, errorThrown) {
+                alert("fail: ["+jqXHR.status+"]\n" + jqXHR.responseText);
+            });
+
+        };
+
+        // create product
+        function createProduct() {
+
+            let param = getSaveProductParameter();
+            console.log(param.data);
+
+            $.ajax({
+                url: BASE_URL + "/products",          
+                contentType: HEADER_CONTENT_TYPE,
+                dataType: HEADER_DATA_TYPE,
+                type: "POST",
+                data: param.data
+            })
+
+            .done(function(result) {
+                console.log(result);
+                afterCreateProduct();
+            })
+
+            .fail(function(jqXHR, textStatus, errorThrown) {
+                alert("fail: ["+jqXHR.status+"]\n" + jqXHR.responseText);
+            });
+
+        };
+
+        // update product
+        function editProduct(id) {
+
+            let param = getSaveProductParameter(id);
+            $.ajax({
+                url: BASE_URL + "/products/" + id,              
+                contentType: HEADER_CONTENT_TYPE,
+                dataType: HEADER_DATA_TYPE,
+                type: "PATCH",
+                data: param.data
+            })
+
+            .done(function(result) {
+                afterEditProduct();
+            })
+
+            .fail(function(jqXHR, textStatus, errorThrown) {
+                alert("fail: ["+jqXHR.status+"]\n" + jqXHR.responseText);
+            });
+
+        };
+
+        // delete product        
+        function deleteProduct(id) {
+
+            $.ajax({
+                url: BASE_URL + "/products/" + id,
+                contentType: HEADER_CONTENT_TYPE,
+                dataType: HEADER_DATA_TYPE,
+                type: "DELETE",
+                data: ""
+            })
+
+            .done(function(result) {
+                afterDeleteProduct();
+            })
+
+            .fail(function(jqXHR, textStatus, errorThrown) {
+                alert("fail: ["+jqXHR.status+"]\n" + jqXHR.responseText);
+            });
+
+        };
+
+        // get single product        
+        function getProduct(id) {
+
+            $.ajax({
+                url: BASE_URL + "/products/" + id,            
+                contentType: HEADER_CONTENT_TYPE,
+                dataType: HEADER_DATA_TYPE,
+                type: "GET",
+                data: ""
+            })
+
+            .done(function(result) {
+                console.log(result);
+                afterGetProduct(result);
+            })
+
+            .fail(function(jqXHR, textStatus, errorThrown) {
+                alert("fail: ["+jqXHR.status+"]\n" + jqXHR.responseText);
+            });
+
+        };
+
+        // parameter setting        
+        function getSaveProductParameter(){
+
+            let param = new Object();
+            let model = new Object();
+
+            model.code = document.getElementById("inputCode").value;
+            model.name = document.getElementById("inputName").value;
+            model.category = document.getElementById("inputCategory").value;
+            model.brand = document.getElementById("inputBrand").value;
+            model.type = document.getElementById("inputType").value;
+            model.description = document.getElementById("txtDescription").value;
+
+            param.data = JSON.stringify(model);
+
+            return param;
+        }
+            
+        /*----------------------------*/
+        /*call back*/
+        /*----------------------------*/
+        function afterGetProducts(result) {
+            console.log(result);
+            if(result){
+                let html = makeDomElement(result.productResultList);
+                document.getElementById("tbodyList").innerHTML = html;
+            }else{
+                alert("no data");
+            }
+        }
+        
+        // draw table
+        function makeDomElement(products) {
+            let contents = "";
+            products.forEach(function(p) {
+                contents += '<tr onclick="btnListClick(\''+ p.id +'\')">'+'<td>'+p.id+'</td><td>'+p.code+'</td><td>'+p.name+'</td><td>'+p.category+'</td><td>'+p.brand+'</td><td>'+p.type+'</td><td>'+p.description+'</td><tr>';
+            });
+
+            return contents;
+        }
+
+        // create callback - refresh
+        function afterCreateProduct(){
+            $("#detailModal").modal('hide');
+            clearModal();
+            getProductList();
+        }
+
+        // edit callback - refresh
+        function afterEditProduct(){
+            $("#detailModal").modal('hide');
+            clearModal();
+            getProductList();
+        }
+
+        // delete callback - refresh
+        function afterDeleteProduct(){
+            $("#detailModal").modal('hide');
+            clearModal();
+            getProductList();
+        }        
+        
+        // modal page data setting
+        function afterGetProduct(product){
+
+            document.getElementById("modalTitle").innerText = "Edit Product";
+            document.getElementById("inputCode").readOnly = true;
+
+            document.getElementById("inputCode").value = product.code;
+            document.getElementById("inputName").value = product.name;
+            document.getElementById("inputCategory").value = product.category;
+            document.getElementById("inputBrand").value = product.brand;
+            document.getElementById("inputType").value = product.type;
+            document.getElementById("txtDescription").value = product.description;
+
+            // use edit key
+            document.getElementById("hiddenId").value = product.id;
+
+            // Show modal edit mode
+            $("#detailModal").modal();
+        }
+
+        /*----------------------------*/
+        /*utils*/
+        /*----------------------------*/ 
+        function btnListClick(id){
+            getProduct(id);
+        }
+
+        function pageClick(page){
+
+            alert("this function is being prepared");
+        }
+
+        function clearModal(){
+            
+            const empty = "";
+
+            document.getElementById("modalTitle").innerText = "Product";
+            document.getElementById("inputCode").readOnly = false;
+
+            document.getElementById("inputCode").value = empty;
+            document.getElementById("inputName").value = empty;
+            document.getElementById("inputCategory").value = empty;
+            document.getElementById("inputBrand").value = empty;
+            document.getElementById("inputType").value = empty;
+            document.getElementById("txtDescription").value = empty;            
+            document.getElementById("hiddenId").value = empty;
+        }
+
+        function inputValidation(){
+            if(document.getElementById("inputCode").value == ""){
+                alert("required code");
+                document.getElementById("inputCode").focus();
+                return false;
+            }
+
+            if(document.getElementById("inputName").value == ""){
+                alert("required name");
+                document.getElementById("inputName").focus();
+                return false;
+            }
+            
+            if(document.getElementById("inputCategory").value == ""){
+                alert("required category");
+                document.getElementById("inputCategory").focus();
+                return false;
+            }
+
+            return true;
+        }
+
+    </script>
+
+
+
+    <body class="sb-nav-fixed">
+        <nav class="sb-topnav navbar navbar-expand navbar-dark bg-dark">
+            <a class="navbar-brand" href="#">Product Management</a>
+            <!-- Navbar Search-->
+            <form class="d-none d-md-inline-block form-inline ml-auto mr-0 mr-md-3 my-2 my-md-0">
+                <div class="input-group">
+                    <!--input class="form-control" type="text" placeholder="Search for..." aria-label="Search" aria-describedby="basic-addon2" />
+                    <div class="input-group-append">
+                        <button class="btn btn-primary" type="button"><i class="fas fa-search"></i></button>
+                    </div-->
+                </div>
+            </form>
+        </nav>
+
+        <div id="layoutSidenav">
+            <div id="layoutSidenav_nav">
+                <!-- side menu -->                
+                <nav class="sb-sidenav accordion sb-sidenav-dark" id="sidenavAccordion">
+                    <div class="sb-sidenav-menu">
+                        <div class="nav">
+                            <a class="nav-link" href="#">
+                                <div class="sb-nav-link-icon"><i class="fas fa-table"></i></div>
+                                Product
+                            </a>
+                        </div>
+                    </div>
+                    <div class="sb-sidenav-footer">
+                        <div class="small">Logged in as:</div>
+                        Start Application
+                    </div>
+                </nav>
+            </div>
+            <div id="layoutSidenav_content">
+                <main>
+                    <div class="container-fluid">
+                        <!-- title -->
+                        <h1 class="mt-4">Product CRUD</h1>
+                        <br>
+                            <div class="row">
+                                <!--div class="col-sm-3">
+                                    <input type="text" placeholder="Search for..." class="form-control" id="inputSearchTerm">
+                                </div>
+                                <div class="col-sm-9">
+                                    <div class="pull-right">
+                                        <button id="btnSearch" class="btn btn-primary" type="button"><i class="fas fa-search"></i></button>
+                                    </div>
+                                </div-->
+                                <div class="col-sm-12">
+                                    <div class="pull-right">
+                                        <button id="btnSearch" type="button" class="btn btn-info btn-lg">Search</button>
+                                    </div>
+                                </div>
+                            </div>
+                        <br>
+
+                        <!-- data grid -->
+                        <div class="card mb-4">
+                            <div class="card-header">
+                                <i class="fas fa-table mr-1"></i> DataTable
+                            </div>
+                            <div class="card-body">
+                                <div class="table-responsive">
+                                    <table class="table table-hover">
+                                        <thead>
+                                            <tr>
+                                                <th>Id</th>
+                                                <th>Code</th>
+                                                <th>Name</th>
+                                                <th>Category</th>
+                                                <th>Brand</th>
+                                                <th>Type</th>
+                                                <th>Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="tbodyList">
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- page TODO : HARD CODE,To update -->
+                        <ul class="pagination">
+                            <!--li class="page-item"><a class="page-link" href="#">Previous</a></li-->
+                            <li class="page-item"><a class="page-link" href="javascript:void(0)" onclick="getProductList(0)">1</a></li>
+                            <li class="page-item"><a class="page-link" href="javascript:void(0)" onclick="getProductList(1)">2</a></li>
+                            <li class="page-item"><a class="page-link" href="javascript:void(0)" onclick="getProductList(2)">3</a></li>
+                            <li class="page-item"><a class="page-link" href="javascript:void(0)" onclick="getProductList(3)">4</a></li>
+                            <li class="page-item"><a class="page-link" href="javascript:void(0)" onclick="getProductList(4)">5</a></li>
+                            <!--li class="page-item"><a class="page-link" href="#">Next</a></li-->
+                          </ul>                        
+                        
+                        <!-- button -->
+                        <div class="col-md-4">
+                            <div class="row">
+                                <div>
+                                    <button id="btnCreate" type="button" class="btn btn-primary btn-lg" data-toggle="modal" data-target="#detailModal">Create</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </main>
+
+                <footer class="py-4 bg-light mt-auto">
+                    <div class="container-fluid">
+                        <div class="d-flex align-items-center justify-content-between small">
+                            <div class="text-muted">Copyright &copy; JongHak.Lee - nice guy 2020</div>
+                            <div>
+                                <a href="#">Privacy Policy</a>
+                                &middot;
+                                <a href="#">Terms &amp; Conditions</a>
+                            </div>
+                        </div>
+                    </div>
+                </footer>
+
+            </div>
+        </div>
+
+        <!-- Modal -->
+        <div class="modal fade" id="detailModal" tabindex="-1" role="dialog" aria-labelledby="detailModalTitle" aria-hidden="true">
+            <div class="modal-dialog modal-lg" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="modalTitle">Title</h5>
+                    </div>
+                    <div class="modal-body">
+                        <!-- inputs -->
+                        <form>
+                            <div class="form-row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="small mb-1" for="inputCode">*Code</label>
+                                        <input class="form-control py-4" id="inputCode" type="text" placeholder="Enter Code" maxlength="9"/>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="small mb-1" for="inputName">*Name</label>
+                                        <input class="form-control py-4" id="inputName" type="text" placeholder="Enter name" maxlength="90"/>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label class="small mb-1" for="inputCategory">*Category</label>
+                                <input class="form-control py-4" id="inputCategory" type="text" placeholder="Enter Category" maxlength="28"/>
+                            </div>
+                            <div class="form-row">
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="small mb-1" for="inputBrand">Brand</label>
+                                        <input class="form-control py-4" id="inputBrand" type="text" placeholder="Enter Brand" maxlength="28"/>
+                                    </div>
+                                </div>
+                                <div class="col-md-6">
+                                    <div class="form-group">
+                                        <label class="small mb-1" for="inputType">Type</label>
+                                        <input class="form-control py-4" id="inputType" type="text" placeholder="Enter Type" maxlength="21"/>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="form-group">
+                                <label for="txtDescription">Description:</label>
+                                <textarea class="form-control" rows="5" id="txtDescription" maxlength="180"></textarea>
+                            </div>
+                            <!-- hidden value - add or edit -->
+                            <input class="form-control py-4" id="hiddenId" type="hidden"/>
+                        </form>
+                    </div>
+                    <!--buttons-->
+                    <div class="modal-footer">
+                        <button id="btnSave" type="button" class="btn btn-primary">Save</button>
+                        <button id="btnDelete" type="button" class="btn btn-danger">Delete</button>
+                        <button type="button" class="btn btn-secondary" data-dismiss="modal">Close</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script src="https://code.jquery.com/jquery-3.5.1.min.js" crossorigin="anonymous"></script>
+        <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.datatables.net/1.10.22/js/jquery.dataTables.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdn.datatables.net/1.10.20/js/dataTables.bootstrap4.min.js" crossorigin="anonymous"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.13.0/js/all.min.js" crossorigin="anonymous"></script>
+    </body>
+</html>
